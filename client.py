@@ -5,6 +5,7 @@ import base64
 import os
 import webbrowser
 
+@Pyro5.api.expose
 class ClientEvents:
     def __init__(self):
         # Usamos uma lock de impressão apenas para não embaralhar sys.stdout
@@ -33,7 +34,7 @@ class ClientEvents:
         if img_base64:
             try:
                 img_data = base64.b64decode(img_base64)
-                filepath = os.path.abspath(f"meu_objeto.png")
+                filepath = os.path.abspath(f"meu_objeto_{os.getpid()}.png")
                 with open(filepath, "wb") as f:
                     f.write(img_data)
                 self._safe_print(f"*** Abrindo imagem do objeto... ***")

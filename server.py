@@ -33,7 +33,7 @@ class GameServer:
             "maca": ["apple", "fruta"],
             "bicicleta": ["bike", "magrela", "bici"],
             "computador": ["pc", "notebook", "laptop", "computador"],
-            "violao": ["guitarra", "violaozinho"],
+            "violao": ["guitarra", "violaozinho", "viola"],
             "livro": ["obra", "livrinho", "book"],
             "relogio": ["despertador", "watch"],
             "aviao": ["aeronave", "jatinho", "airplane"],
@@ -135,7 +135,7 @@ class GameServer:
             except:
                 pass
                 
-        self._broadcast_event("phase_changed", "WAITING_HINTS", f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! O jogo começou! Todos devem enviar sua dica pública usando: /dica <palavra>")
+        self._broadcast_event("phase_changed", "WAITING_HINTS", f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! O jogo começou! Todos devem enviar sua dica pública.")
         return True, "Jogo iniciado."
 
     def send_public_hint(self, sender, hint):
@@ -152,7 +152,7 @@ class GameServer:
         
         self._broadcast_event("receive_public_hint", sender, hint)
         if all_hints:
-            self._broadcast_event("phase_changed", "ACTION_PHASE", "Fase de Ações liberada! Comandos: /trocar, /espiar, /adivinhar. Quando terminar, digite /pronto")
+            self._broadcast_event("phase_changed", "ACTION_PHASE", "Fase de Ações liberada! Façam seus palpites, trocas e espionagens. Quando terminar, encerre seu turno.")
             
         return True, "Dica recebida."
 
@@ -295,7 +295,7 @@ class GameServer:
     def player_ready(self, player):
         with self._lock:
             if self.phase != "ACTION_PHASE":
-                return False, "O comando /pronto só serve na ACTION_PHASE."
+                return False, "Você só pode encerrar o turno na ACTION_PHASE."
             if self.player_states[player]['is_ready']:
                 return False, "Você já está pronto."
                 
@@ -310,7 +310,7 @@ class GameServer:
                         self.player_states[name]['is_ready'] = False
                         self.player_states[name]['public_hint'] = None
                     self.phase = "WAITING_HINTS"
-                    self._broadcast_event("phase_changed", "WAITING_HINTS", f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! Mandem novas dicas públicas com /dica <palavra>.")
+                    self._broadcast_event("phase_changed", "WAITING_HINTS", f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! Mandem novas dicas públicas.")
                 else:
                     self._calculate_scores_and_end_game()
                 
@@ -357,7 +357,7 @@ class GameServer:
             lines.append(f" - {p}: {s['score']} pts")
             
         lines.append("=========================")
-        lines.append("Digite /votar para jogar novamente.")
+        lines.append("Vote para jogar novamente.")
         
         final_message = "\n".join(lines)
         self._broadcast_event("phase_changed", "END_GAME", final_message)
@@ -369,7 +369,7 @@ class GameServer:
             self.restart_votes.add(player)
             if len(self.restart_votes) >= len(self.clients):
                 self.phase = "LOBBY"
-                self._broadcast_event("phase_changed", "LOBBY", "Todos votaram! De volta ao lobby. Alguém use /iniciar para nova partida.")
+                self._broadcast_event("phase_changed", "LOBBY", "Todos votaram! De volta ao lobby. Alguém deve iniciar a nova partida.")
         return True, "Voto computado."
 
 def main():
