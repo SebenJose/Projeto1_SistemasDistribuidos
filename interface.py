@@ -289,7 +289,7 @@ class GameGUI:
         self.entry_chat.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
         self.entry_chat.bind("<Return>", lambda e: self.cmd_chat())
         tk.Button(
-            self.frame_chat, text="Enviar / Comando", command=self.cmd_chat, width=15
+            self.frame_chat, text="Enviar Chat", command=self.cmd_chat, width=15
         ).pack(side=tk.RIGHT, padx=(5, 0), ipady=2)
 
     def _fill_manual_text(self):
@@ -376,11 +376,19 @@ class GameGUI:
         for name, info in sorted(
             scores_data.items(), key=lambda x: x[1]["score"], reverse=True
         ):
-            status = ""
+            status_parts = []
             if info.get("is_ready"):
-                status += " [PRONTO]"
-            if info.get("guesses_made", 0) > 0:
-                status += f" (✔️ {info['guesses_made']})"
+                status_parts.append("PRONTO")
+            correct_guesses = info.get("correct_guesses_made", 0)
+            object_guessed_by = info.get(
+                "object_guessed_by", info.get("guesses_made", 0)
+            )
+            if correct_guesses > 0:
+                status_parts.append(f"acertou {correct_guesses}")
+            if object_guessed_by > 0:
+                status_parts.append(f"objeto acertado por {object_guessed_by}")
+
+            status = f" [{' | '.join(status_parts)}]" if status_parts else ""
             self.txt_scores.insert(tk.END, f"{name}: {info['score']} pts{status}\n")
         self.txt_scores.config(state="disabled")
 
@@ -508,10 +516,13 @@ class GameGUI:
             f"O jogador {guesser} tentou adivinhar que o seu objeto é '{guess_word}'.\n\nEsse palpite está CORRETO?",
         )
         try:
-            self.server.judge_guess(self.player_name, guesser, resposta)
-            self.log_message(
-                f"-> Você informou ao servidor que o palpite de {guesser} estava {'CORRETO' if resposta else 'ERRADO'}."
-            )
+            ok, msg = self.server.judge_guess(self.player_name, guesser, resposta)
+            if ok:
+                self.log_message(
+                    f"-> Você informou ao servidor que o palpite de {guesser} estava {'CORRETO' if resposta else 'ERRADO'}."
+                )
+            else:
+                self.log_message(f"-> Falha ao registrar julgamento: {msg}")
         except Exception as e:
             self.log_message(f"[ERRO] Falha ao enviar julgamento: {e}")
 
@@ -636,20 +647,4 @@ class GameGUI:
         if not texto:
             return
         self.entry_chat.delete(0, tk.END)
-        if texto.startswith("/"):
-            parts = texto.split()
-            cmd = parts[0].lower()
-            if cmd == "/espiar" and len(parts) >= 3:
-                self.send_action(
-                    self.server.spy_on_trade, self.player_name, parts[1], parts[2]
-                )
-            elif cmd == "/chat" and len(parts) >= 2:
-                self.send_action(
-                    self.server.send_chat_message, self.player_name, " ".join(parts[1:])
-                )
-            else:
-                self.log_message(
-                    "-> Comando não reconhecido. Use /chat <msg> ou /espiar J1 J2."
-                )
-        else:
-            self.send_action(self.server.send_chat_message, self.player_name, texto)
+        self.send_action(self.server.send_chat_message, self.player_name, texto)

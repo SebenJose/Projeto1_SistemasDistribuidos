@@ -1,4 +1,16 @@
 class ScoreCalculator:
+    FIRST_CORRECT_GUESS_POINTS = 20
+    LATER_CORRECT_GUESS_POINTS = 10
+    ONLY_GUESSER_BONUS = 10
+
+    @classmethod
+    def apply_correct_guess(cls, player_states, target, guesser):
+        current_hits = len(player_states[target]["guessers"])
+        if current_hits == 0:
+            player_states[guesser]["score"] += cls.FIRST_CORRECT_GUESS_POINTS
+        else:
+            player_states[guesser]["score"] += cls.LATER_CORRECT_GUESS_POINTS
+
     @staticmethod
     def calculate_round_end(player_states):
         total_players = len(player_states)
@@ -6,14 +18,8 @@ class ScoreCalculator:
             guessers = state["guessers"]
             n = len(guessers)
 
-            if n > 0:
-                # Bônus de rapidez para o primeiro que acertou
-                first_guesser = guessers[0]
-                player_states[first_guesser]["score"] += 20 + (10 if n == 1 else 0)
-
-                # Pontos normais para os demais que acertaram
-                for g in guessers[1:]:
-                    player_states[g]["score"] += 10
+            if n == 1:
+                player_states[guessers[0]]["score"] += ScoreCalculator.ONLY_GUESSER_BONUS
 
             # Bônus ou penalidade de exclusividade para o dono
             if n == 1:

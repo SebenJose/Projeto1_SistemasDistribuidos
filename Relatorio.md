@@ -38,8 +38,9 @@ A aplicação segue uma arquitetura **Cliente-Servidor modularizada**, visando a
 1. **Iniciando o Servidor:** `python server.py`
 2. **Iniciando os Clientes:** `python client.py "Nome_do_Jogador"`
 
-#### Comandos e Uso:
-- **Interface**: Utilize os botões e menus suspensos para realizar ações (Dicas, Palpites, Trocas e Espionagem).
-- **`/chat <mensagem>`**: Comunicação global através do campo de texto inferior.
-- **`/espiar <J1> <J2>`**: Comando via chat para tentar ver as dicas trocadas entre dois jogadores.
-- **Pronto**: Finaliza suas ações no turno. O jogo avança quando todos estiverem prontos.
+#### Controles e Uso:
+- **Interface**: Utilize os botões e menus suspensos para realizar ações de jogo (dicas públicas, palpites, trocas privadas, espionagem e votação).
+- **Chat global**: O campo de texto inferior é usado somente para conversa entre os jogadores.
+- **Troca privada**: O jogador solicita pelo painel de troca, e o alvo aceita ou recusa pelo painel exibido na interface.
+- **Espionagem**: Após uma troca privada, jogadores terceiros recebem um alerta próprio perguntando se desejam tentar espiar.
+- **Pronto**: Finaliza suas ações no turno. O jogo avança quando todos estiverem prontos e não houver julgamentos pendentes.

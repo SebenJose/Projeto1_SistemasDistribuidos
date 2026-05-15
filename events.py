@@ -86,12 +86,6 @@ class ClientEvents:
                     f"[PALPITE] {guesser} errou ao dizer que o objeto de {target} era '{guess_word}'.",
                 )
             )
-            self.msg_queue.put(
-                (
-                    "log",
-                    f"[PALPITE] {guesser} errou ao dizer que o objeto de {target} era '{guess_word}'.",
-                )
-            )
 
     @Pyro5.api.oneway
     def request_judgment(self, guesser, guess_word):
