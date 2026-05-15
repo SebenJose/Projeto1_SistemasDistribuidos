@@ -79,9 +79,10 @@ Com as 3 janelas gráficas de jogadores posicionadas na sua tela, siga este rote
    * *O que observar:* Uma **Caixa de Pop-up (Alerta)** vai travar a tela exclusivamente do **Bob**. O próprio Bob é quem fará a arbitragem clicando em "Sim" ou "Não". Ao clicar, o resultado volta pro servidor que pontua a Alice e notifica a todos.
 
 4. **Teste de Troca Secreta e Espionagem:**
-   * No campo de Chat (inferior direito) na tela do **Charlie**, digite `/trocar Alice dica_falsa` e clique em enviar.
-   * Na tela da **Alice**, ela receberá o pedido em seu histórico de logs e pode responder digitando no chat: `/aceitar Charlie dica_verdadeira`.
-   * Na tela do **Bob**, ele verá um *[ALERTA]* avisando que Charlie e Alice efetuaram uma troca, mas a dica será secreta. Ele pode tentar interceptar digitando no seu chat: `/espiar Alice Charlie`. O servidor rodará a chance de 30% e aplicará punição ou recompensa.
+   * Na tela do **Charlie**, use a seção **Trocar Dica**: escolha **Alice**, informe uma dica de uma palavra e clique em **Solicitar Troca**.
+   * Na tela da **Alice**, o painel de resposta da troca será exibido. Ela deve informar uma dica de uma palavra e clicar em **Aceitar Troca** ou **Recusar Troca**.
+   * Na tela do **Bob**, ele verá um *[ALERTA]* avisando que Charlie e Alice efetuaram uma troca, mas a dica será secreta. O próprio alerta abrirá a opção de tentar espionar essa troca. O servidor rodará a chance de descoberta e aplicará punição ou recompensa.
+   * O campo de chat é usado somente para conversa global; dicas, trocas, palpites e espionagem são ações separadas do jogo.
 
 5. **Avanço de Turno / Fim de Jogo:**
    * Todos os três jogadores devem clicar no botão laranja **`Pronto (Encerrar meu Turno)`**. 
