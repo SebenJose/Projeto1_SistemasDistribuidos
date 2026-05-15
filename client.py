@@ -1,12 +1,13 @@
+import base64
+import queue
 import sys
 import threading
-import queue
-import Pyro5.api
-import base64
 import tkinter as tk
-from tkinter import scrolledtext, messagebox
-from PIL import Image, ImageTk
 from io import BytesIO
+from tkinter import messagebox, scrolledtext
+
+import Pyro5.api
+from PIL import Image, ImageTk
 
 DISABLED_BG = "#9e9e9e"
 
@@ -26,7 +27,12 @@ class ClientEvents:
 
     @Pyro5.api.oneway
     def game_started(self, secret_object, img_base64=""):
-        self.msg_queue.put(("log", f"\n*** O JOGO COMEÇOU! ***\n*** SEU OBJETO SECRETO É: [{secret_object}] ***"))
+        self.msg_queue.put(
+            (
+                "log",
+                f"\n*** O JOGO COMEÇOU! ***\n*** SEU OBJETO SECRETO É: [{secret_object}] ***",
+            )
+        )
         if img_base64:
             self.msg_queue.put(("image", img_base64))
 
@@ -44,25 +50,55 @@ class ClientEvents:
 
     @Pyro5.api.oneway
     def trade_completed(self, partner, partner_hint):
-        self.msg_queue.put(("log", f"[TROCA CONCLUÍDA] A dica secreta de {partner} é: '{partner_hint}'"))
+        self.msg_queue.put(
+            (
+                "log",
+                f"[TROCA CONCLUÍDA] A dica secreta de {partner} é: '{partner_hint}'",
+            )
+        )
 
     @Pyro5.api.oneway
     def trade_occurred_public(self, player_a, player_b):
-        self.msg_queue.put(("log", f"[ALERTA] {player_a} e {player_b} efetuaram uma troca privada!\n-> Use o painel 'Espiar Troca' para tentar ver as dicas trocadas."))
+        self.msg_queue.put(
+            (
+                "log",
+                f"[ALERTA] {player_a} e {player_b} efetuaram uma troca privada!\n-> Use o painel 'Espiar Troca' para tentar ver as dicas trocadas.",
+            )
+        )
 
     @Pyro5.api.oneway
     def spy_result(self, spy_name, player_a, player_b, success):
         if success:
-            self.msg_queue.put(("log", f"[ESPIONAGEM] {spy_name} espiou a troca de {player_a} e {player_b} e saiu impune!"))
+            self.msg_queue.put(
+                (
+                    "log",
+                    f"[ESPIONAGEM] {spy_name} espiou a troca de {player_a} e {player_b} e saiu impune!",
+                )
+            )
         else:
-            self.msg_queue.put(("log", f"[ESPIONAGEM FALHOU] {spy_name} tentou espiar {player_a} e {player_b} e foi pego! Perdeu 10 pontos!"))
+            self.msg_queue.put(
+                (
+                    "log",
+                    f"[ESPIONAGEM FALHOU] {spy_name} tentou espiar {player_a} e {player_b} e foi pego! Perdeu 10 pontos!",
+                )
+            )
 
     @Pyro5.api.oneway
     def guess_result(self, guesser, target, guess_word, is_correct):
         if is_correct:
-            self.msg_queue.put(("log", f"[PALPITE] {guesser} ACERTOU que o objeto de {target} era '{guess_word}'!"))
+            self.msg_queue.put(
+                (
+                    "log",
+                    f"[PALPITE] {guesser} ACERTOU que o objeto de {target} era '{guess_word}'!",
+                )
+            )
         else:
-            self.msg_queue.put(("log", f"[PALPITE] {guesser} errou ao dizer que o objeto de {target} era '{guess_word}'."))
+            self.msg_queue.put(
+                (
+                    "log",
+                    f"[PALPITE] {guesser} errou ao dizer que o objeto de {target} era '{guess_word}'.",
+                )
+            )
 
     @Pyro5.api.oneway
     def request_judgment(self, guesser, guess_word):
@@ -92,13 +128,17 @@ class GameGUI:
         self.client_daemon = Pyro5.api.Daemon()
         self.client_events = ClientEvents(self.msg_queue)
         self.callback_uri = self.client_daemon.register(self.client_events)
-        self.daemon_thread = threading.Thread(target=self.client_daemon.requestLoop, daemon=True)
+        self.daemon_thread = threading.Thread(
+            target=self.client_daemon.requestLoop, daemon=True
+        )
         self.daemon_thread.start()
 
         self.setup_ui()
 
         try:
-            success, msg = self.server.register_client(self.player_name, self.callback_uri)
+            success, msg = self.server.register_client(
+                self.player_name, self.callback_uri
+            )
             if not success:
                 messagebox.showerror("Erro de Conexão", msg)
                 self.root.destroy()
@@ -133,39 +173,74 @@ class GameGUI:
         self.frame_left = tk.Frame(self.root, width=300, bg="gray20")
         self.frame_left.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
 
-        tk.Label(self.frame_left, text="Seu Objeto Secreto", fg="white", bg="gray20",
-                 font=("Arial", 12, "bold")).pack(pady=10)
+        tk.Label(
+            self.frame_left,
+            text="Seu Objeto Secreto",
+            fg="white",
+            bg="gray20",
+            font=("Arial", 12, "bold"),
+        ).pack(pady=10)
 
-        self.lbl_image = tk.Label(self.frame_left, text="Aguardando\ninício do jogo...",
-                                  bg="gray30", fg="white", width=35, height=15)
+        self.lbl_image = tk.Label(
+            self.frame_left,
+            text="Aguardando\ninício do jogo...",
+            bg="gray30",
+            fg="white",
+            width=35,
+            height=15,
+        )
         self.lbl_image.pack(padx=10, pady=5)
 
-        tk.Label(self.frame_left, text="Placar", fg="white", bg="gray20",
-                 font=("Arial", 11, "bold")).pack(pady=(10, 0))
-        self.txt_scores = tk.Text(self.frame_left, state='disabled', height=8,
-                                  bg="gray25", fg="white", relief=tk.FLAT, font=("Courier", 10))
+        tk.Label(
+            self.frame_left,
+            text="Placar",
+            fg="white",
+            bg="gray20",
+            font=("Arial", 11, "bold"),
+        ).pack(pady=(10, 0))
+        self.txt_scores = tk.Text(
+            self.frame_left,
+            state="disabled",
+            height=8,
+            bg="gray25",
+            fg="white",
+            relief=tk.FLAT,
+            font=("Courier", 10),
+        )
         self.txt_scores.pack(fill=tk.X, padx=10, pady=(0, 5))
 
         self.frame_mid = tk.Frame(self.root, width=250)
         self.frame_mid.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
-        self.btn_iniciar = tk.Button(self.frame_mid, text="▶ Iniciar Partida", command=self.cmd_iniciar,
-                                     bg="#4CAF50", fg="white", font=("Arial", 10, "bold"))
+        self.btn_iniciar = tk.Button(
+            self.frame_mid,
+            text="▶ Iniciar Partida",
+            command=self.cmd_iniciar,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+        )
         self.btn_iniciar.pack(fill=tk.X, pady=10)
 
         tk.Label(self.frame_mid, text="Dica Pública:").pack(anchor=tk.W, pady=(10, 0))
         self.entry_dica = tk.Entry(self.frame_mid)
         self.entry_dica.pack(fill=tk.X, ipady=3)
-        self.btn_dica = tk.Button(self.frame_mid, text="Enviar Dica", command=self.cmd_dica)
+        self.btn_dica = tk.Button(
+            self.frame_mid, text="Enviar Dica", command=self.cmd_dica
+        )
         self.btn_dica.pack(fill=tk.X, pady=2)
 
-        tk.Label(self.frame_mid, text="Adivinhar (Jogador Alvo):").pack(anchor=tk.W, pady=(10, 0))
+        tk.Label(self.frame_mid, text="Adivinhar (Jogador Alvo):").pack(
+            anchor=tk.W, pady=(10, 0)
+        )
         self.entry_alvo = tk.Entry(self.frame_mid)
         self.entry_alvo.pack(fill=tk.X, ipady=3)
         tk.Label(self.frame_mid, text="Adivinhar (Palpite):").pack(anchor=tk.W)
         self.entry_palpite = tk.Entry(self.frame_mid)
         self.entry_palpite.pack(fill=tk.X, ipady=3)
-        self.btn_adivinhar = tk.Button(self.frame_mid, text="Enviar Palpite", command=self.cmd_adivinhar)
+        self.btn_adivinhar = tk.Button(
+            self.frame_mid, text="Enviar Palpite", command=self.cmd_adivinhar
+        )
         self.btn_adivinhar.pack(fill=tk.X, pady=2)
 
         tk.Label(self.frame_mid, text="Espiar Troca:").pack(anchor=tk.W, pady=(10, 0))
@@ -175,7 +250,9 @@ class GameGUI:
         self.entry_espiar_j2 = tk.Entry(self.frame_mid)
         self.entry_espiar_j2.pack(fill=tk.X, ipady=3)
         self.entry_espiar_j2.insert(0, "Jogador 2")
-        self.btn_espiar = tk.Button(self.frame_mid, text="Espiar Troca", command=self.cmd_espiar)
+        self.btn_espiar = tk.Button(
+            self.frame_mid, text="Espiar Troca", command=self.cmd_espiar
+        )
         self.btn_espiar.pack(fill=tk.X, pady=2)
 
         tk.Label(self.frame_mid, text="Trocar Dica:").pack(anchor=tk.W, pady=(10, 0))
@@ -185,57 +262,105 @@ class GameGUI:
         self.entry_trade_dica = tk.Entry(self.frame_mid)
         self.entry_trade_dica.pack(fill=tk.X, ipady=3)
         self.entry_trade_dica.insert(0, "Sua dica")
-        self.btn_trade_solicitar = tk.Button(self.frame_mid, text="Solicitar Troca",
-                                             command=self.cmd_trade_solicitar)
+        self.btn_trade_solicitar = tk.Button(
+            self.frame_mid, text="Solicitar Troca", command=self.cmd_trade_solicitar
+        )
         self.btn_trade_solicitar.pack(fill=tk.X, pady=2)
 
-        self.frame_trade_resp = tk.Frame(self.frame_mid, relief=tk.GROOVE, bd=2, bg="#fff8e1")
-        self.lbl_trade_resp = tk.Label(self.frame_trade_resp, text="", wraplength=220,
-                                       bg="#fff8e1", font=("Arial", 9, "bold"))
+        self.frame_trade_resp = tk.Frame(
+            self.frame_mid, relief=tk.GROOVE, bd=2, bg="#fff8e1"
+        )
+        self.lbl_trade_resp = tk.Label(
+            self.frame_trade_resp,
+            text="",
+            wraplength=220,
+            bg="#fff8e1",
+            font=("Arial", 9, "bold"),
+        )
         self.lbl_trade_resp.pack(anchor=tk.W, padx=5, pady=2)
-        tk.Label(self.frame_trade_resp, text="Sua dica em troca:", bg="#fff8e1").pack(anchor=tk.W, padx=5)
+        tk.Label(self.frame_trade_resp, text="Sua dica em troca:", bg="#fff8e1").pack(
+            anchor=tk.W, padx=5
+        )
         self.entry_trade_resp_dica = tk.Entry(self.frame_trade_resp)
         self.entry_trade_resp_dica.pack(fill=tk.X, padx=5, ipady=3)
-        self.btn_aceitar = tk.Button(self.frame_trade_resp, text="Aceitar Troca",
-                                     command=self.cmd_aceitar_troca, bg="#4CAF50", fg="white")
+        self.btn_aceitar = tk.Button(
+            self.frame_trade_resp,
+            text="Aceitar Troca",
+            command=self.cmd_aceitar_troca,
+            bg="#4CAF50",
+            fg="white",
+        )
         self.btn_aceitar.pack(fill=tk.X, padx=5, pady=2)
-        self.btn_recusar = tk.Button(self.frame_trade_resp, text="Recusar Troca",
-                                     command=self.cmd_recusar_troca, bg="#f44336", fg="white")
+        self.btn_recusar = tk.Button(
+            self.frame_trade_resp,
+            text="Recusar Troca",
+            command=self.cmd_recusar_troca,
+            bg="#f44336",
+            fg="white",
+        )
         self.btn_recusar.pack(fill=tk.X, padx=5, pady=2)
 
-        self.btn_pronto = tk.Button(self.frame_mid, text="Pronto (Encerrar meu Turno)",
-                                    command=self.cmd_pronto, bg="#FF9800", fg="white",
-                                    font=("Arial", 10, "bold"))
+        self.btn_pronto = tk.Button(
+            self.frame_mid,
+            text="Pronto (Encerrar meu Turno)",
+            command=self.cmd_pronto,
+            bg="#FF9800",
+            fg="white",
+            font=("Arial", 10, "bold"),
+        )
         self.btn_pronto.pack(fill=tk.X, pady=(10, 2))
 
-        self.btn_continuar = tk.Button(self.frame_mid, text="Continuar Jogo",
-                                       command=self.cmd_continuar, bg="#2196F3", fg="white",
-                                       font=("Arial", 10, "bold"))
+        self.btn_continuar = tk.Button(
+            self.frame_mid,
+            text="Continuar Jogo",
+            command=self.cmd_continuar,
+            bg="#2196F3",
+            fg="white",
+            font=("Arial", 10, "bold"),
+        )
         self.btn_continuar.pack(fill=tk.X, pady=2)
-        self.btn_encerrar_jogo = tk.Button(self.frame_mid, text="Encerrar Jogo",
-                                           command=self.cmd_encerrar_jogo, bg="#9C27B0", fg="white",
-                                           font=("Arial", 10, "bold"))
+        self.btn_encerrar_jogo = tk.Button(
+            self.frame_mid,
+            text="Encerrar Jogo",
+            command=self.cmd_encerrar_jogo,
+            bg="#9C27B0",
+            fg="white",
+            font=("Arial", 10, "bold"),
+        )
         self.btn_encerrar_jogo.pack(fill=tk.X, pady=2)
 
-        self.btn_votar = tk.Button(self.frame_mid, text="Votar para Reiniciar Jogo",
-                                   command=self.cmd_votar)
+        self.btn_votar = tk.Button(
+            self.frame_mid, text="Votar para Reiniciar Jogo", command=self.cmd_votar
+        )
         self.btn_votar.pack(fill=tk.X, pady=5)
 
-        for btn in [self.btn_iniciar, self.btn_dica, self.btn_adivinhar, self.btn_espiar,
-                    self.btn_trade_solicitar, self.btn_pronto, self.btn_continuar,
-                    self.btn_encerrar_jogo, self.btn_votar, self.btn_aceitar, self.btn_recusar]:
-            self._btn_colors[btn] = btn.cget('bg')
+        for btn in [
+            self.btn_iniciar,
+            self.btn_dica,
+            self.btn_adivinhar,
+            self.btn_espiar,
+            self.btn_trade_solicitar,
+            self.btn_pronto,
+            self.btn_continuar,
+            self.btn_encerrar_jogo,
+            self.btn_votar,
+            self.btn_aceitar,
+            self.btn_recusar,
+        ]:
+            self._btn_colors[btn] = btn.cget("bg")
 
         self.update_ui_state()
 
         self.frame_right = tk.Frame(self.root)
         self.frame_right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        tk.Label(self.frame_right, text="Histórico / Chat Global",
-                 font=("Arial", 12, "bold")).pack(anchor=tk.W)
+        tk.Label(
+            self.frame_right, text="Histórico / Chat Global", font=("Arial", 12, "bold")
+        ).pack(anchor=tk.W)
 
-        self.txt_log = scrolledtext.ScrolledText(self.frame_right, state='disabled',
-                                                  wrap=tk.WORD, bg="#f4f4f4")
+        self.txt_log = scrolledtext.ScrolledText(
+            self.frame_right, state="disabled", wrap=tk.WORD, bg="#f4f4f4"
+        )
         self.txt_log.pack(fill=tk.BOTH, expand=True, pady=5)
 
         self.frame_chat = tk.Frame(self.frame_right)
@@ -243,39 +368,48 @@ class GameGUI:
         self.entry_chat = tk.Entry(self.frame_chat)
         self.entry_chat.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
         self.entry_chat.bind("<Return>", lambda e: self.cmd_chat())
-        tk.Button(self.frame_chat, text="Enviar / Comando", command=self.cmd_chat,
-                  width=15).pack(side=tk.RIGHT, padx=(5, 0), ipady=2)
+        tk.Button(
+            self.frame_chat, text="Enviar / Comando", command=self.cmd_chat, width=15
+        ).pack(side=tk.RIGHT, padx=(5, 0), ipady=2)
 
     def _set_state(self, widgets, enabled):
-        state = 'normal' if enabled else 'disabled'
+        state = "normal" if enabled else "disabled"
         for w in widgets:
             w.config(state=state)
             if isinstance(w, tk.Button) and w in self._btn_colors:
                 w.config(bg=self._btn_colors[w] if enabled else DISABLED_BG)
 
     def log_message(self, msg):
-        self.txt_log.config(state='normal')
+        self.txt_log.config(state="normal")
         self.txt_log.insert(tk.END, msg + "\n")
         self.txt_log.see(tk.END)
-        self.txt_log.config(state='disabled')
+        self.txt_log.config(state="disabled")
 
     def update_scoreboard(self, scores):
-        self.txt_scores.config(state='normal')
-        self.txt_scores.delete('1.0', tk.END)
+        self.txt_scores.config(state="normal")
+        self.txt_scores.delete("1.0", tk.END)
         for name, score in sorted(scores.items(), key=lambda x: x[1], reverse=True):
             self.txt_scores.insert(tk.END, f"{name}: {score} pts\n")
-        self.txt_scores.config(state='disabled')
+        self.txt_scores.config(state="disabled")
 
     def update_ui_state(self):
         phase = self.current_phase
         all_widgets = [
             self.btn_iniciar,
-            self.entry_dica, self.btn_dica,
-            self.entry_alvo, self.entry_palpite, self.btn_adivinhar,
-            self.entry_espiar_j1, self.entry_espiar_j2, self.btn_espiar,
-            self.entry_trade_alvo, self.entry_trade_dica, self.btn_trade_solicitar,
+            self.entry_dica,
+            self.btn_dica,
+            self.entry_alvo,
+            self.entry_palpite,
+            self.btn_adivinhar,
+            self.entry_espiar_j1,
+            self.entry_espiar_j2,
+            self.btn_espiar,
+            self.entry_trade_alvo,
+            self.entry_trade_dica,
+            self.btn_trade_solicitar,
             self.btn_pronto,
-            self.btn_continuar, self.btn_encerrar_jogo,
+            self.btn_continuar,
+            self.btn_encerrar_jogo,
             self.btn_votar,
         ]
         self._set_state(all_widgets, False)
@@ -288,12 +422,21 @@ class GameGUI:
                 self._set_state([self.entry_dica, self.btn_dica], True)
         elif phase == "ACTION_PHASE":
             if not self.is_ready:
-                self._set_state([
-                    self.entry_alvo, self.entry_palpite, self.btn_adivinhar,
-                    self.entry_espiar_j1, self.entry_espiar_j2, self.btn_espiar,
-                    self.entry_trade_alvo, self.entry_trade_dica, self.btn_trade_solicitar,
-                    self.btn_pronto,
-                ], True)
+                self._set_state(
+                    [
+                        self.entry_alvo,
+                        self.entry_palpite,
+                        self.btn_adivinhar,
+                        self.entry_espiar_j1,
+                        self.entry_espiar_j2,
+                        self.btn_espiar,
+                        self.entry_trade_alvo,
+                        self.entry_trade_dica,
+                        self.btn_trade_solicitar,
+                        self.btn_pronto,
+                    ],
+                    True,
+                )
                 if self.pending_trade_from:
                     self.frame_trade_resp.pack(fill=tk.X, pady=5)
         elif phase == "VOTE_CONTINUE":
@@ -313,7 +456,9 @@ class GameGUI:
                     self.log_message(msg[1])
                 elif event == "phase":
                     new_phase, message = msg[1], msg[2]
-                    self.log_message(f"\n--- FASE ALTERADA: {new_phase} ---\n-> {message}")
+                    self.log_message(
+                        f"\n--- FASE ALTERADA: {new_phase} ---\n-> {message}"
+                    )
                     self.current_phase = new_phase
                     if new_phase in ("WAITING_HINTS", "LOBBY"):
                         self.hint_sent = False
@@ -329,9 +474,13 @@ class GameGUI:
                 elif event == "trade_request":
                     sender = msg[1]
                     self.pending_trade_from = sender
-                    self.lbl_trade_resp.config(text=f"{sender} quer trocar dicas com você!")
+                    self.lbl_trade_resp.config(
+                        text=f"{sender} quer trocar dicas com você!"
+                    )
                     self.frame_trade_resp.pack(fill=tk.X, pady=5)
-                    self.log_message(f"[TROCA] {sender} enviou um pedido de troca. Responda no painel de ações.")
+                    self.log_message(
+                        f"[TROCA] {sender} enviou um pedido de troca. Responda no painel de ações."
+                    )
                 elif event == "scores":
                     self.update_scoreboard(msg[1])
         except queue.Empty:
@@ -343,9 +492,18 @@ class GameGUI:
         try:
             img_data = base64.b64decode(b64)
             image = Image.open(BytesIO(img_data))
-            image = image.resize((260, 260), Image.Resampling.LANCZOS)
+            # Compatibilidade com versões antigas do Pillow
+            resample_filter = getattr(
+                Image, "LANCZOS", getattr(Image, "ANTIALIAS", None)
+            )
+            if hasattr(Image, "Resampling"):
+                resample_filter = Image.Resampling.LANCZOS
+
+            image = image.resize((260, 260), resample_filter)
             photo = ImageTk.PhotoImage(image)
-            self.lbl_image.config(image=photo, text="", bg="black", width=260, height=260)
+            self.lbl_image.config(
+                image=photo, text="", bg="black", width=260, height=260
+            )
             self.lbl_image.image = photo
             self.log_message("*** Imagem carregada e exibida na interface! ***")
         except Exception as e:
@@ -354,17 +512,25 @@ class GameGUI:
     def ask_judgment(self, guesser, guess_word):
         resposta = messagebox.askyesno(
             "Julgamento Necessário!",
-            f"O jogador {guesser} tentou adivinhar que o seu objeto é '{guess_word}'.\n\nEsse palpite está CORRETO?"
+            f"O jogador {guesser} tentou adivinhar que o seu objeto é '{guess_word}'.\n\nEsse palpite está CORRETO?",
         )
         try:
             self.server.judge_guess(self.player_name, guesser, resposta)
-            self.log_message(f"-> Você informou ao servidor que o palpite de {guesser} estava {'CORRETO' if resposta else 'ERRADO'}.")
+            self.log_message(
+                f"-> Você informou ao servidor que o palpite de {guesser} estava {'CORRETO' if resposta else 'ERRADO'}."
+            )
         except Exception as e:
             self.log_message(f"[ERRO] Falha ao enviar julgamento: {e}")
 
     def send_action(self, action_func, *args):
         try:
-            ok, msg = action_func(*args)
+            res = action_func(*args)
+            # Trata retorno nulo ou unitário para evitar erro de desempacotamento
+            if isinstance(res, tuple) and len(res) == 2:
+                ok, msg = res
+            else:
+                ok, msg = True, res
+
             if msg:
                 self.log_message(f"-> {msg}")
             return ok
@@ -428,8 +594,13 @@ class GameGUI:
         if not self.pending_trade_from:
             self.log_message("-> Erro: nenhum pedido de troca pendente.")
             return
-        ok = self.send_action(self.server.respond_trade,
-                              self.player_name, self.pending_trade_from, True, dica)
+        ok = self.send_action(
+            self.server.respond_trade,
+            self.player_name,
+            self.pending_trade_from,
+            True,
+            dica,
+        )
         if ok:
             self.entry_trade_resp_dica.delete(0, tk.END)
             self.pending_trade_from = None
@@ -439,8 +610,9 @@ class GameGUI:
         if not self.pending_trade_from:
             self.log_message("-> Erro: nenhum pedido de troca pendente.")
             return
-        ok = self.send_action(self.server.respond_trade,
-                              self.player_name, self.pending_trade_from, False)
+        ok = self.send_action(
+            self.server.respond_trade, self.player_name, self.pending_trade_from, False
+        )
         if ok:
             self.pending_trade_from = None
             self.frame_trade_resp.pack_forget()
@@ -471,13 +643,26 @@ class GameGUI:
         if not texto:
             return
         self.entry_chat.delete(0, tk.END)
-        if texto.startswith('/'):
+
+        if texto.startswith("/"):
             parts = texto.split()
             cmd = parts[0].lower()
-            if cmd == '/espiar' and len(parts) >= 3:
-                self.send_action(self.server.spy_on_trade, self.player_name, parts[1], parts[2])
+            if cmd == "/espiar" and len(parts) >= 3:
+                self.send_action(
+                    self.server.spy_on_trade, self.player_name, parts[1], parts[2]
+                )
+            elif cmd == "/chat" and len(parts) >= 2:
+                # Permite usar /chat <mensagem> como no manual
+                msg_real = " ".join(parts[1:])
+                self.send_action(
+                    self.server.send_chat_message, self.player_name, msg_real
+                )
+            elif cmd == "/chat" and len(parts) < 2:
+                self.log_message("-> Uso: /chat <mensagem>")
             else:
-                self.log_message("-> Comando não reconhecido. Use o painel de ações ou /espiar J1 J2.")
+                self.log_message(
+                    "-> Comando não reconhecido. Use /chat <msg> ou /espiar J1 J2."
+                )
         else:
             self.send_action(self.server.send_chat_message, self.player_name, texto)
 

@@ -45,6 +45,22 @@ class GameServer:
             "Aviao",
             "Cadeira",
         ]
+        
+        # Dicionário e Sinônimos
+        self.possible_objects = ["Cachorro", "Carro", "Maca", "Bicicleta", "Computador", "Violao", "Livro", "Relogio", "Aviao", "Cadeira"]
+        self.object_synonyms = {
+            "cachorro": ["cao", "dog", "cachorrinho", "cadela"],
+            "carro": ["automovel", "veiculo", "caranga", "auto"],
+            "maca": ["apple", "fruta"],
+            "bicicleta": ["bike", "magrela", "bici"],
+            "computador": ["pc", "notebook", "laptop", "computador"],
+            "violao": ["guitarra", "violaozinho", "viola"],
+            "livro": ["obra", "livrinho", "book"],
+            "relogio": ["despertador", "watch"],
+            "aviao": ["aeronave", "jatinho", "airplane"],
+            "cadeira": ["assento", "poltrona", "banco"]
+        }
+        
         self.pending_trades = {}
         self.trade_history = {}
         self.restart_votes = set()
@@ -334,6 +350,16 @@ class GameServer:
                     "VOTE_CONTINUE",
                     f"Turno {self.turn_count}/{self.MAX_TURNS} concluído! Votem se desejam continuar ou encerrar o jogo.",
                 )
+                if self.turn_count < self.MAX_TURNS:
+                    self.turn_count += 1
+                    for name in self.player_states:
+                        self.player_states[name]['is_ready'] = False
+                        self.player_states[name]['public_hint'] = None
+                    self.phase = "WAITING_HINTS"
+                    self._broadcast_event("phase_changed", "WAITING_HINTS", f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! Mandem novas dicas públicas.")
+                else:
+                    self._calculate_scores_and_end_game()
+                
         return True, "Você encerrou suas ações para este turno."
 
     def vote_continue(self, player, wants_continue):
