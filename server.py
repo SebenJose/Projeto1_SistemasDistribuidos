@@ -1,19 +1,18 @@
 import base64
 import random
 import threading
-import unicodedata
 
 import Pyro5.api
 
-
-def remove_accents(s):
-    return (
-        "".join(
-            c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
-        )
-        .lower()
-        .strip()
-    )
+from constants import (
+    MAX_TURNS,
+    OBJECT_SYNONYMS,
+    POSSIBLE_OBJECTS,
+    SERVER_HOST,
+    SERVER_PORT,
+    remove_accents,
+)
+from score import ScoreCalculator
 
 
 class ChatSystem:
@@ -33,41 +32,14 @@ class GameServer:
         self._lock = threading.RLock()
         self.phase = "LOBBY"
         self.player_states = {}
-        self.possible_objects = [
-            "Cachorro",
-            "Carro",
-            "Maca",
-            "Bicicleta",
-            "Computador",
-            "Violao",
-            "Livro",
-            "Relogio",
-            "Aviao",
-            "Cadeira",
-        ]
-        
-        # Dicionário e Sinônimos
-        self.possible_objects = ["Cachorro", "Carro", "Maca", "Bicicleta", "Computador", "Violao", "Livro", "Relogio", "Aviao", "Cadeira"]
-        self.object_synonyms = {
-            "cachorro": ["cao", "dog", "cachorrinho", "cadela"],
-            "carro": ["automovel", "veiculo", "caranga", "auto"],
-            "maca": ["apple", "fruta"],
-            "bicicleta": ["bike", "magrela", "bici"],
-            "computador": ["pc", "notebook", "laptop", "computador"],
-            "violao": ["guitarra", "violaozinho", "viola"],
-            "livro": ["obra", "livrinho", "book"],
-            "relogio": ["despertador", "watch"],
-            "aviao": ["aeronave", "jatinho", "airplane"],
-            "cadeira": ["assento", "poltrona", "banco"]
-        }
-        
+
         self.pending_trades = {}
         self.trade_history = {}
         self.restart_votes = set()
         self.continue_votes = {}
         self.turn_count = 1
-        self.MAX_TURNS = 3
         self.pending_guesses = {}
+        self.failed_guesses = {}
 
     def _find_player(self, name):
         name_lower = name.strip().lower()
@@ -83,8 +55,7 @@ class GameServer:
                 try:
                     with Pyro5.api.Proxy(uri) as proxy:
                         getattr(proxy, method_name)(*args)
-                except Exception as e:
-                    print(f"[Servidor] Falha ao notificar '{name}': {e}")
+                except Exception:
                     disconnected.append(name)
             for name in disconnected:
                 del self.clients[name]
@@ -92,8 +63,14 @@ class GameServer:
                     del self.player_states[name]
 
     def _broadcast_scores(self):
-        scores = {name: state["score"] for name, state in self.player_states.items()}
-        self._broadcast_event("scores_updated", scores)
+        scores_data = {}
+        for name, state in self.player_states.items():
+            scores_data[name] = {
+                "score": state["score"],
+                "guesses_made": len(state["guessers"]),
+                "is_ready": state["is_ready"],
+            }
+        self._broadcast_event("scores_updated", scores_data)
 
     def register_client(self, name, callback_uri):
         with self._lock:
@@ -117,41 +94,41 @@ class GameServer:
     def broadcast_chat(self, sender, message):
         self._broadcast_event("receive_chat_message", sender, message)
 
-    def start_game(self, initiator):
-        with self._lock:
-            if self.phase != "LOBBY":
-                return False, "O jogo já iniciou."
-            if len(self.clients) < 2:
-                return False, "Necessário pelo menos 2 jogadores."
-            self.phase = "WAITING_HINTS"
-            self.turn_count = 1
-            self.restart_votes.clear()
-            self.continue_votes.clear()
-            self.pending_trades.clear()
-            self.trade_history.clear()
-            objects = random.sample(self.possible_objects, len(self.clients))
-            for idx, name in enumerate(self.clients.keys()):
-                current_score = self.player_states.get(name, {}).get("score", 0)
-                self.player_states[name] = {
+    def _start_round(self, is_first=False):
+        self.turn_count = 1
+        self.pending_trades.clear()
+        self.trade_history.clear()
+        self.failed_guesses.clear()
+        self.continue_votes.clear()
+
+        objects = random.sample(POSSIBLE_OBJECTS, len(self.clients))
+        for idx, name in enumerate(self.clients.keys()):
+            if is_first:
+                self.player_states[name] = {"score": 0}
+
+            self.player_states[name].update(
+                {
                     "object": objects[idx],
-                    "score": current_score,
                     "public_hint": None,
                     "guessers": [],
                     "is_ready": False,
                     "has_traded": False,
+                    "has_spied": False,
                 }
-            self.pending_guesses = {name: [] for name in self.clients.keys()}
+            )
+        self.pending_guesses = {name: [] for name in self.clients.keys()}
 
         for name, state in self.player_states.items():
-            img_base64 = ""
+            img_b64 = ""
             try:
                 with open(f"objects_images/{state['object']}.png", "rb") as f:
-                    img_base64 = base64.b64encode(f.read()).decode("utf-8")
-            except Exception as e:
-                print(f"[Aviso] Imagem não encontrada para {state['object']}: {e}")
+                    img_b64 = base64.b64encode(f.read()).decode("utf-8")
+            except Exception:
+                pass
+
             try:
                 with Pyro5.api.Proxy(self.clients[name]) as proxy:
-                    proxy.game_started(state["object"], img_base64)
+                    proxy.game_started(state["object"], img_b64)
             except Exception:
                 pass
 
@@ -159,8 +136,17 @@ class GameServer:
         self._broadcast_event(
             "phase_changed",
             "WAITING_HINTS",
-            f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! O jogo começou! Todos devem enviar sua dica pública.",
+            f"Rodada Iniciada! Mandem sua dica publica.",
         )
+
+    def start_game(self, initiator):
+        with self._lock:
+            if self.phase != "LOBBY":
+                return False, "O jogo ja iniciou."
+            if len(self.clients) < 2:
+                return False, "Minimo 2 jogadores."
+            self.phase = "WAITING_HINTS"
+            self._start_round(is_first=True)
         return True, "Jogo iniciado."
 
     def send_public_hint(self, sender, hint):
@@ -183,7 +169,7 @@ class GameServer:
             self._broadcast_event(
                 "phase_changed",
                 "ACTION_PHASE",
-                "Fase de Ações liberada! Façam seus palpites, trocas e espionagens. Quando terminar, encerre seu turno.",
+                "Fase de Ações liberada! Façam seus palpites e trocas.",
             )
         return True, "Dica recebida."
 
@@ -195,14 +181,11 @@ class GameServer:
             if target not in self.player_states or sender == target:
                 return False, "Jogador não encontrado."
             if self.player_states[sender]["has_traded"]:
-                return False, "Você já realizou ou aceitou uma troca nesta rodada."
+                return False, "Você já realizou uma troca nesta rodada."
             if target in self.pending_trades:
                 return False, "Alvo já possui pedido pendente."
             if self.player_states[sender]["is_ready"]:
-                return (
-                    False,
-                    "Você já está marcado como pronto. Aguarde o fim do turno.",
-                )
+                return False, "Você já está marcado como pronto."
             if len(hint.split()) != 1:
                 return False, "A dica deve ser uma única palavra."
             self.pending_trades[target] = {"sender": sender, "hint": hint}
@@ -237,9 +220,6 @@ class GameServer:
         try:
             with Pyro5.api.Proxy(self.clients[sender]) as proxy:
                 proxy.trade_completed(target, target_hint)
-        except Exception:
-            pass
-        try:
             with Pyro5.api.Proxy(self.clients[target]) as proxy:
                 proxy.trade_completed(sender, sender_hint)
         except Exception:
@@ -257,9 +237,13 @@ class GameServer:
                 return False, "Você não pode espiar a si mesmo."
             if self.player_states[spy_name]["is_ready"]:
                 return False, "Você já está marcado como pronto."
+            if self.player_states[spy_name]["has_spied"]:
+                return False, "Você já realizou uma espionagem neste turno."
             trade_key = frozenset([player_a, player_b])
             if trade_key not in self.trade_history:
                 return False, "Troca inexistente."
+
+            self.player_states[spy_name]["has_spied"] = True
             if random.random() < 0.30:
                 self.player_states[spy_name]["score"] -= 10
                 fail = True
@@ -283,15 +267,17 @@ class GameServer:
                 return False, "Jogador não encontrado."
             if guesser in self.player_states[target]["guessers"]:
                 return False, "Você já acertou o objeto deste jogador."
+            if (guesser, target) in self.failed_guesses:
+                return False, "Você já errou o objeto deste jogador neste turno."
             if self.player_states[guesser]["is_ready"]:
-                return False, "Você já está pronto e não pode mais adivinhar."
+                return False, "Você já está pronto."
             self.pending_guesses[target].append((guesser, guess_word))
         try:
             with Pyro5.api.Proxy(self.clients[target]) as proxy:
                 proxy.request_judgment(guesser, guess_word)
         except Exception as e:
-            return False, f"Falha ao enviar para arbitração: {e}"
-        return True, "Palpite enviado ao dono do objeto para julgamento. Aguarde."
+            return False, f"Falha ao enviar: {e}"
+        return True, "Palpite enviado para julgamento."
 
     def judge_guess(self, judge_player, guesser, is_correct):
         with self._lock:
@@ -300,104 +286,92 @@ class GameServer:
             pending = self.pending_guesses.get(judge_player, [])
             found = next((p for p in pending if p[0] == guesser), None)
             if not found:
-                return False, "Nenhum palpite pendente deste jogador."
+                return False, "Nenhum palpite pendente."
             guess_word = found[1]
             self.pending_guesses[judge_player].remove(found)
             if is_correct:
                 self.player_states[judge_player]["guessers"].append(guesser)
             else:
                 self.player_states[guesser]["score"] -= 5
+                self.failed_guesses[(guesser, judge_player)] = True
 
-        if is_correct:
-            self._broadcast_event(
-                "guess_result", guesser, judge_player, guess_word, True
-            )
-        else:
-            self._broadcast_scores()
-            self._broadcast_event(
-                "guess_result", guesser, judge_player, guess_word, False
-            )
+        self._broadcast_scores()
+        self._broadcast_event(
+            "guess_result", guesser, judge_player, guess_word, is_correct
+        )
 
         with self._lock:
-            if self.phase == "ACTION_PHASE":
-                all_players = set(self.player_states.keys())
-                guessers_set = {
-                    g for s in self.player_states.values() for g in s["guessers"]
-                }
-                if all_players == guessers_set:
-                    self._calculate_scores_and_end_game()
-                    return (
-                        True,
-                        "Julgamento registrado. Todos adivinharam — jogo encerrado!",
-                    )
+            all_players = set(self.player_states.keys())
+            guessers_set = {
+                g for s in self.player_states.values() for g in s["guessers"]
+            }
+            if all_players == guessers_set:
+                self._calculate_scores_and_end_game()
+                return True, "Todos adivinharam — jogo encerrado!"
 
         return True, "Julgamento registrado."
 
     def player_ready(self, player):
         with self._lock:
             if self.phase != "ACTION_PHASE":
-                return False, "Você só pode encerrar o turno na ACTION_PHASE."
+                return False, "Apenas na ACTION_PHASE."
             if self.player_states[player]["is_ready"]:
-                return False, "Você já está pronto."
+                return False, "Voce ja esta pronto."
             self.player_states[player]["is_ready"] = True
-            self.broadcast_chat("Sistema", f"'{player}' declarou que está PRONTO.")
+            self.broadcast_chat("Sistema", f"'{player}' esta PRONTO.")
+            self._broadcast_scores()
             all_ready = all(s["is_ready"] for s in self.player_states.values())
             if all_ready:
-                self.continue_votes = {}
-                self.phase = "VOTE_CONTINUE"
-                self._broadcast_event(
-                    "phase_changed",
-                    "VOTE_CONTINUE",
-                    f"Turno {self.turn_count}/{self.MAX_TURNS} concluído! Votem se desejam continuar ou encerrar o jogo.",
-                )
-                if self.turn_count < self.MAX_TURNS:
+                if self.turn_count < MAX_TURNS:
                     self.turn_count += 1
                     for name in self.player_states:
-                        self.player_states[name]['is_ready'] = False
-                        self.player_states[name]['public_hint'] = None
+                        self.player_states[name].update(
+                            {
+                                "is_ready": False,
+                                "public_hint": None,
+                                "has_traded": False,
+                                "has_spied": False,
+                            }
+                        )
+                    self.pending_trades.clear()
+                    self.trade_history.clear()
+                    self.failed_guesses.clear()
+                    self.pending_guesses = {name: [] for name in self.player_states}
                     self.phase = "WAITING_HINTS"
-                    self._broadcast_event("phase_changed", "WAITING_HINTS", f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! Mandem novas dicas públicas.")
+                    self._broadcast_scores()
+                    self._broadcast_event(
+                        "phase_changed",
+                        "WAITING_HINTS",
+                        f"Turno {self.turn_count}/{MAX_TURNS} iniciado! Mandem novas dicas.",
+                    )
                 else:
-                    self._calculate_scores_and_end_game()
-                
-        return True, "Você encerrou suas ações para este turno."
+                    self.phase = "VOTE_CONTINUE"
+                    self._broadcast_event(
+                        "phase_changed",
+                        "VOTE_CONTINUE",
+                        "Rodada concluida! Votem para continuar com novos objetos ou encerrar.",
+                    )
+        return True, "Turno encerrado."
 
     def vote_continue(self, player, wants_continue):
         action = None
-        next_turn_msg = ""
         with self._lock:
             if self.phase != "VOTE_CONTINUE":
-                return (
-                    False,
-                    "Votação de continuação só permitida na fase VOTE_CONTINUE.",
-                )
-            if player not in self.player_states:
-                return False, "Jogador não reconhecido."
-            if player in self.continue_votes:
-                return False, "Você já votou nesta rodada."
+                return False, "Apenas na fase VOTE_CONTINUE."
             self.continue_votes[player] = wants_continue
             if len(self.continue_votes) < len(self.player_states):
-                return True, "Voto registrado. Aguardando os outros jogadores."
+                return True, "Voto registrado."
+
             votes_for = sum(1 for v in self.continue_votes.values() if v)
-            if (
-                votes_for > len(self.player_states) / 2
-                and self.turn_count < self.MAX_TURNS
-            ):
-                self.turn_count += 1
-                for name in self.player_states:
-                    self.player_states[name]["is_ready"] = False
-                    self.player_states[name]["public_hint"] = None
-                    self.player_states[name]["has_traded"] = False
-                self.pending_trades.clear()
-                self.trade_history.clear()
-                self.pending_guesses = {name: [] for name in self.player_states}
+            if votes_for > len(self.player_states) / 2:
+                action = "next_round"
                 self.phase = "WAITING_HINTS"
-                action = "next_turn"
-                next_turn_msg = f"Turno {self.turn_count}/{self.MAX_TURNS} iniciado! Mandem novas dicas públicas."
             else:
                 action = "end_game"
-        if action == "next_turn":
-            self._broadcast_event("phase_changed", "WAITING_HINTS", next_turn_msg)
+
+        if action == "next_round":
+            with self._lock:
+                self._start_round()
         elif action == "end_game":
             self._calculate_scores_and_end_game()
         return True, "Voto registrado."
@@ -407,21 +381,7 @@ class GameServer:
             if self.phase == "END_GAME":
                 return
             self.phase = "END_GAME"
-
-        total = len(self.player_states)
-        for target, state in self.player_states.items():
-            guessers = state["guessers"]
-            n = len(guessers)
-            if n > 0:
-                self.player_states[guessers[0]]["score"] += 20 + (10 if n == 1 else 0)
-                for g in guessers[1:]:
-                    self.player_states[g]["score"] += 10
-            if n == 1:
-                state["score"] += 30
-            elif 1 < n < total - 1:
-                state["score"] += 15
-            elif n >= total - 1:
-                state["score"] -= 20
+            self.player_states = ScoreCalculator.calculate_round_end(self.player_states)
 
         lines = ["\n===== FIM DA RODADA =====", "OBJETOS SECRETOS:"]
         for p, s in self.player_states.items():
@@ -440,25 +400,21 @@ class GameServer:
     def vote_restart(self, player):
         with self._lock:
             if self.phase != "END_GAME":
-                return False, "Votação só permitida no fim do jogo."
+                return False, "Apenas no fim do jogo."
             self.restart_votes.add(player)
             if len(self.restart_votes) >= len(self.clients):
                 self.restart_votes.clear()
                 self.phase = "LOBBY"
                 self._broadcast_event(
-                    "phase_changed",
-                    "LOBBY",
-                    "Todos votaram! De volta ao lobby. Alguém deve iniciar a nova partida.",
+                    "phase_changed", "LOBBY", "Todos votaram! De volta ao lobby."
                 )
         return True, "Voto computado."
 
 
 def main():
-    print("Iniciando o Servidor (GameServer)...")
-    daemon = Pyro5.api.Daemon(host="localhost", port=9090)
+    daemon = Pyro5.api.Daemon(host=SERVER_HOST, port=SERVER_PORT)
     uri = daemon.register(GameServer, objectId="GameServer")
-    print(f"[Servidor] Escutando em: {uri}")
-    print("[Servidor] Aguardando clientes...\n")
+    print(f"[Servidor] Rodando em: {uri}")
     daemon.requestLoop()
 
 
