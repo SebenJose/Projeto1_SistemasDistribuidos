@@ -2,6 +2,9 @@ class ScoreCalculator:
     FIRST_CORRECT_GUESS_POINTS = 20
     LATER_CORRECT_GUESS_POINTS = 10
     ONLY_GUESSER_BONUS = 10
+    OWNER_ONE_GUESSER_POINTS = 15
+    OWNER_SOME_GUESSERS_POINTS = 8
+    OWNER_ALL_GUESSERS_PENALTY = 10
 
     @classmethod
     def apply_correct_guess(cls, player_states, target, guesser):
@@ -21,12 +24,15 @@ class ScoreCalculator:
             if n == 1:
                 player_states[guessers[0]]["score"] += ScoreCalculator.ONLY_GUESSER_BONUS
 
+            if total_players == 2:
+                continue
+
             # Bônus ou penalidade de exclusividade para o dono
             if n == 1:
-                state["score"] += 30
+                state["score"] += ScoreCalculator.OWNER_ONE_GUESSER_POINTS
             elif 1 < n < total_players - 1:
-                state["score"] += 15
+                state["score"] += ScoreCalculator.OWNER_SOME_GUESSERS_POINTS
             elif n >= total_players - 1 and total_players > 2:
-                state["score"] -= 20
+                state["score"] -= ScoreCalculator.OWNER_ALL_GUESSERS_PENALTY
 
         return player_states

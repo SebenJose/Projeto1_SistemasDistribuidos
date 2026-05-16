@@ -1,5 +1,6 @@
 import base64
 import random
+import re
 import threading
 
 import Pyro5.api
@@ -50,6 +51,24 @@ class GameServer:
                 return key
         return None
 
+    def _forbidden_object_words(self, player):
+        state = self.player_states.get(player)
+        if not state or "object" not in state:
+            return set()
+        object_key = remove_accents(state["object"])
+        return {object_key, *OBJECT_SYNONYMS.get(object_key, [])}
+
+    def _contains_own_object_word(self, player, text):
+        forbidden_words = self._forbidden_object_words(player)
+        if not forbidden_words:
+            return False
+        normalized_text = remove_accents(text)
+        words = set(re.findall(r"[a-z0-9]+", normalized_text))
+        return bool(words & forbidden_words)
+
+    def _object_filter_message(self):
+        return "Mensagem bloqueada: não use o nome do seu objeto nem sinônimos como dica."
+
     def _broadcast_event(self, method_name, *args):
         disconnected = []
         with self._lock:
@@ -97,8 +116,12 @@ class GameServer:
         return True, "Registrado com sucesso!"
 
     def send_chat_message(self, sender, message):
-        self.chat_system.add_message(sender, message)
+        with self._lock:
+            if self._contains_own_object_word(sender, message):
+                return False, self._object_filter_message()
+            self.chat_system.add_message(sender, message)
         self.broadcast_chat(sender, message)
+        return True, "Mensagem enviada."
 
     def broadcast_chat(self, sender, message):
         self._broadcast_event("receive_chat_message", sender, message)
@@ -147,7 +170,7 @@ class GameServer:
         self._broadcast_event(
             "phase_changed",
             "WAITING_HINTS",
-            f"Rodada Iniciada! Mandem sua dica publica.",
+            "Rodada iniciada. Envie sua dica pública de uma palavra.",
         )
 
     def start_game(self, initiator):
@@ -169,6 +192,8 @@ class GameServer:
                 return False, "Você já enviou sua dica pública."
             if len(hint.split()) != 1:
                 return False, "A dica deve ser uma única palavra."
+            if self._contains_own_object_word(sender, hint):
+                return False, self._object_filter_message()
             self.player_states[sender]["public_hint"] = hint
             all_hints = all(
                 s["public_hint"] is not None for s in self.player_states.values()
@@ -180,7 +205,7 @@ class GameServer:
             self._broadcast_event(
                 "phase_changed",
                 "ACTION_PHASE",
-                "Fase de Ações liberada! Façam seus palpites e trocas.",
+                "Ações liberadas. Façam palpites, trocas privadas ou encerrem o turno.",
             )
         return True, "Dica recebida."
 
@@ -199,6 +224,8 @@ class GameServer:
                 return False, "Você já está marcado como pronto."
             if len(hint.split()) != 1:
                 return False, "A dica deve ser uma única palavra."
+            if self._contains_own_object_word(sender, hint):
+                return False, self._object_filter_message()
             self.pending_trades[target] = {"sender": sender, "hint": hint}
         try:
             with Pyro5.api.Proxy(self.clients[target]) as proxy:
@@ -216,6 +243,8 @@ class GameServer:
                 return False, "Nenhum pedido pendente deste jogador."
             if accept and (target_hint is None or len(target_hint.split()) != 1):
                 return False, "A dica deve ser uma única palavra."
+            if accept and self._contains_own_object_word(target, target_hint):
+                return False, self._object_filter_message()
             pending = self.pending_trades.pop(target)
             sender_hint = pending["hint"]
             if not accept:
@@ -332,15 +361,6 @@ class GameServer:
             "guess_result", guesser, judge_player, guess_word, is_correct
         )
 
-        with self._lock:
-            all_players = set(self.player_states.keys())
-            guessers_set = {
-                g for s in self.player_states.values() for g in s["guessers"]
-            }
-            if all_players == guessers_set:
-                self._calculate_scores_and_end_game()
-                return True, "Todos adivinharam — jogo encerrado!"
-
         if should_finish_action_phase:
             self._finish_action_phase()
 
@@ -354,7 +374,7 @@ class GameServer:
             if self.player_states[player]["is_ready"]:
                 return False, "Voce ja esta pronto."
             self.player_states[player]["is_ready"] = True
-            self.broadcast_chat("Sistema", f"'{player}' esta PRONTO.")
+            self.broadcast_chat("Sistema", f"{player} está pronto.")
             self._broadcast_scores()
             should_finish_action_phase = self._should_finish_action_phase_locked()
 
@@ -402,7 +422,6 @@ class GameServer:
                         {
                             "is_ready": False,
                             "public_hint": None,
-                            "has_traded": False,
                             "has_spied": False,
                         }
                     )
@@ -415,14 +434,14 @@ class GameServer:
                 next_phase = "WAITING_HINTS"
                 message = (
                     f"Turno {self.turn_count}/{MAX_TURNS} iniciado! "
-                    "Mandem novas dicas."
+                    "Enviem novas dicas públicas."
                 )
             else:
                 self._score_round_if_needed_locked()
                 self.phase = "VOTE_CONTINUE"
                 next_phase = "VOTE_CONTINUE"
                 message = (
-                    "Rodada concluida e pontuada! "
+                    "Rodada concluída e pontuada. "
                     "Votem para continuar com novos objetos ou encerrar."
                 )
 

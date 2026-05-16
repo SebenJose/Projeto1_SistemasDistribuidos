@@ -2,15 +2,28 @@ import base64
 import queue
 import threading
 import tkinter as tk
+from datetime import datetime
 from io import BytesIO
 from tkinter import messagebox, scrolledtext
 
 import Pyro5.api
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageOps
 
 from events import ClientEvents
 
-DISABLED_BG = "#9e9e9e"
+APP_BG = "#eef2f7"
+PANEL_BG = "#ffffff"
+SIDEBAR_BG = "#17212f"
+SIDEBAR_CARD = "#223044"
+TEXT_DARK = "#1f2937"
+TEXT_MUTED = "#64748b"
+ACCENT = "#2563eb"
+SUCCESS = "#16a34a"
+WARNING = "#f59e0b"
+DANGER = "#dc2626"
+PURPLE = "#7c3aed"
+DISABLED_BG = "#cbd5e1"
+DISABLED_FG = "#64748b"
 
 
 class GameGUI:
@@ -19,7 +32,9 @@ class GameGUI:
         self.player_name = player_name
         self.server = Pyro5.api.Proxy(server_uri)
         self.root.title(f"Adivinhação - Jogador: {player_name}")
-        self.root.geometry("950x700")
+        self.root.geometry("1480x820")
+        self.root.minsize(1320, 720)
+        self.root.configure(bg=APP_BG)
         self.msg_queue = queue.Queue()
         self._btn_colors = {}
         self.player_list = []
@@ -57,178 +72,282 @@ class GameGUI:
         self.root.after(100, self.process_queue)
 
     def setup_ui(self):
-        self.frame_left = tk.Frame(self.root, width=300, bg="gray20")
-        self.frame_left.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
+        self.frame_left = tk.Frame(self.root, width=620, bg=SIDEBAR_BG)
+        self.frame_left.pack(side=tk.LEFT, fill=tk.Y)
+        self.frame_left.pack_propagate(False)
 
         tk.Label(
             self.frame_left,
             text="Seu Objeto Secreto",
-            fg="white",
-            bg="gray20",
-            font=("Arial", 12, "bold"),
-        ).pack(pady=10)
+            fg="#f8fafc",
+            bg=SIDEBAR_BG,
+            font=("Arial", 14, "bold"),
+        ).pack(pady=(18, 10))
 
         self.lbl_image = tk.Label(
             self.frame_left,
             text="Aguardando\ninício do jogo...",
-            bg="gray30",
-            fg="white",
-            width=35,
-            height=15,
+            bg=SIDEBAR_CARD,
+            fg="#cbd5e1",
+            width=68,
+            height=18,
+            relief=tk.FLAT,
+            font=("Arial", 10, "bold"),
         )
-        self.lbl_image.pack(padx=10, pady=5)
+        self.lbl_image.pack(padx=18, pady=4)
 
         tk.Label(
             self.frame_left,
             text="Placar",
-            fg="white",
-            bg="gray20",
-            font=("Arial", 11, "bold"),
-        ).pack(pady=(10, 0))
+            fg="#f8fafc",
+            bg=SIDEBAR_BG,
+            font=("Arial", 12, "bold"),
+        ).pack(pady=(18, 6))
         self.txt_scores = tk.Text(
             self.frame_left,
             state="disabled",
             height=8,
-            bg="gray25",
-            fg="white",
+            bg=SIDEBAR_CARD,
+            fg="#f8fafc",
             relief=tk.FLAT,
             font=("Courier", 10),
+            padx=8,
+            pady=8,
+            insertbackground="#f8fafc",
         )
-        self.txt_scores.pack(fill=tk.X, padx=10, pady=(0, 5))
+        self.txt_scores.pack(fill=tk.X, padx=18, pady=(0, 5))
 
         tk.Label(
             self.frame_left,
             text="Dicas Descobertas",
-            fg="white",
-            bg="gray20",
-            font=("Arial", 11, "bold"),
-        ).pack(pady=(10, 0))
+            fg="#f8fafc",
+            bg=SIDEBAR_BG,
+            font=("Arial", 12, "bold"),
+        ).pack(pady=(16, 6))
         self.txt_hints_history = tk.Text(
             self.frame_left,
             state="disabled",
             height=8,
-            bg="gray25",
-            fg="#90EE90",
+            bg=SIDEBAR_CARD,
+            fg="#bbf7d0",
             relief=tk.FLAT,
             font=("Courier", 10),
+            padx=8,
+            pady=8,
+            insertbackground="#f8fafc",
         )
-        self.txt_hints_history.pack(fill=tk.X, padx=10, pady=(0, 5))
+        self.txt_hints_history.pack(fill=tk.BOTH, expand=True, padx=18, pady=(0, 14))
 
-        self.frame_mid = tk.Frame(self.root, width=250)
-        self.frame_mid.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+        self.frame_mid = tk.Frame(self.root, width=380, bg=PANEL_BG)
+        self.frame_mid.pack(side=tk.LEFT, fill=tk.Y, padx=(12, 0), pady=12)
+        self.frame_mid.pack_propagate(False)
 
         self.btn_iniciar = tk.Button(
             self.frame_mid,
-            text="▶ Iniciar Partida",
+            text="Iniciar Partida",
             command=self.cmd_iniciar,
-            bg="#4CAF50",
-            fg="white",
+            bg=SUCCESS,
+            fg="#ffffff",
             font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            activebackground="#15803d",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_iniciar.pack(fill=tk.X, pady=10)
+        self.btn_iniciar.pack(fill=tk.X, padx=12, pady=(14, 10), ipady=5)
 
-        tk.Label(self.frame_mid, text="Dica Pública:").pack(anchor=tk.W, pady=(10, 0))
-        self.entry_dica = tk.Entry(self.frame_mid)
-        self.entry_dica.pack(fill=tk.X, ipady=3)
+        tk.Label(
+            self.frame_mid,
+            text="Dica Pública",
+            bg=PANEL_BG,
+            fg=TEXT_DARK,
+            font=("Arial", 9, "bold"),
+        ).pack(anchor=tk.W, padx=12, pady=(10, 3))
+        self.entry_dica = tk.Entry(self.frame_mid, relief=tk.FLAT, bg="#f8fafc")
+        self.entry_dica.pack(fill=tk.X, padx=12, ipady=6)
         self.btn_dica = tk.Button(
-            self.frame_mid, text="Enviar Dica", command=self.cmd_dica
+            self.frame_mid,
+            text="Enviar Dica",
+            command=self.cmd_dica,
+            bg=ACCENT,
+            fg="#ffffff",
+            relief=tk.FLAT,
+            activebackground="#1d4ed8",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_dica.pack(fill=tk.X, pady=2)
+        self.btn_dica.pack(fill=tk.X, padx=12, pady=(4, 8), ipady=4)
 
-        tk.Label(self.frame_mid, text="Adivinhar (Jogador Alvo):").pack(
-            anchor=tk.W, pady=(10, 0)
-        )
+        tk.Label(
+            self.frame_mid,
+            text="Adivinhar",
+            bg=PANEL_BG,
+            fg=TEXT_DARK,
+            font=("Arial", 10, "bold"),
+        ).pack(anchor=tk.W, padx=12, pady=(10, 3))
+        tk.Label(
+            self.frame_mid,
+            text="Jogador alvo",
+            bg=PANEL_BG,
+            fg=TEXT_MUTED,
+            font=("Arial", 9),
+        ).pack(anchor=tk.W, padx=12)
         self.val_alvo = tk.StringVar(self.root)
         self.opt_alvo = tk.OptionMenu(self.frame_mid, self.val_alvo, "")
-        self.opt_alvo.pack(fill=tk.X)
+        self.opt_alvo.config(bg="#f8fafc", fg=TEXT_DARK, relief=tk.FLAT, highlightthickness=0)
+        self.opt_alvo.pack(fill=tk.X, padx=12, pady=(2, 5))
 
-        tk.Label(self.frame_mid, text="Adivinhar (Palpite):").pack(anchor=tk.W)
-        self.entry_palpite = tk.Entry(self.frame_mid)
-        self.entry_palpite.pack(fill=tk.X, ipady=3)
+        tk.Label(
+            self.frame_mid,
+            text="Palpite",
+            bg=PANEL_BG,
+            fg=TEXT_MUTED,
+            font=("Arial", 9),
+        ).pack(anchor=tk.W, padx=12)
+        self.entry_palpite = tk.Entry(self.frame_mid, relief=tk.FLAT, bg="#f8fafc")
+        self.entry_palpite.pack(fill=tk.X, padx=12, ipady=6)
         self.btn_adivinhar = tk.Button(
-            self.frame_mid, text="Enviar Palpite", command=self.cmd_adivinhar
+            self.frame_mid,
+            text="Enviar Palpite",
+            command=self.cmd_adivinhar,
+            bg=ACCENT,
+            fg="#ffffff",
+            relief=tk.FLAT,
+            activebackground="#1d4ed8",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_adivinhar.pack(fill=tk.X, pady=2)
+        self.btn_adivinhar.pack(fill=tk.X, padx=12, pady=(4, 8), ipady=4)
 
-        tk.Label(self.frame_mid, text="Trocar Dica:").pack(anchor=tk.W, pady=(10, 0))
+        tk.Label(
+            self.frame_mid,
+            text="Troca Privada",
+            bg=PANEL_BG,
+            fg=TEXT_DARK,
+            font=("Arial", 10, "bold"),
+        ).pack(anchor=tk.W, padx=12, pady=(10, 3))
         self.val_trade_alvo = tk.StringVar(self.root)
         self.opt_trade_alvo = tk.OptionMenu(self.frame_mid, self.val_trade_alvo, "")
-        self.opt_trade_alvo.pack(fill=tk.X)
+        self.opt_trade_alvo.config(bg="#f8fafc", fg=TEXT_DARK, relief=tk.FLAT, highlightthickness=0)
+        self.opt_trade_alvo.pack(fill=tk.X, padx=12, pady=(2, 5))
 
-        self.entry_trade_dica = tk.Entry(self.frame_mid)
-        self.entry_trade_dica.pack(fill=tk.X, ipady=3)
+        self.entry_trade_dica = tk.Entry(self.frame_mid, relief=tk.FLAT, bg="#f8fafc")
+        self.entry_trade_dica.pack(fill=tk.X, padx=12, ipady=6)
         self.entry_trade_dica.insert(0, "")
         self.btn_trade_solicitar = tk.Button(
-            self.frame_mid, text="Solicitar Troca", command=self.cmd_trade_solicitar
+            self.frame_mid,
+            text="Solicitar Troca",
+            command=self.cmd_trade_solicitar,
+            bg=PURPLE,
+            fg="#ffffff",
+            relief=tk.FLAT,
+            activebackground="#6d28d9",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_trade_solicitar.pack(fill=tk.X, pady=2)
+        self.btn_trade_solicitar.pack(fill=tk.X, padx=12, pady=(4, 8), ipady=4)
 
         self.frame_trade_resp = tk.Frame(
-            self.frame_mid, relief=tk.GROOVE, bd=2, bg="#fff8e1"
+            self.frame_mid, relief=tk.FLAT, bd=0, bg="#fff7ed"
         )
         self.lbl_trade_resp = tk.Label(
             self.frame_trade_resp,
             text="",
-            wraplength=220,
-            bg="#fff8e1",
+            wraplength=356,
+            bg="#fff7ed",
+            fg="#9a3412",
             font=("Arial", 9, "bold"),
         )
-        self.lbl_trade_resp.pack(anchor=tk.W, padx=5, pady=2)
-        tk.Label(self.frame_trade_resp, text="Sua dica em troca:", bg="#fff8e1").pack(
-            anchor=tk.W, padx=5
+        self.lbl_trade_resp.pack(anchor=tk.W, padx=8, pady=(8, 2))
+        tk.Label(
+            self.frame_trade_resp,
+            text="Sua dica em troca",
+            bg="#fff7ed",
+            fg="#9a3412",
+            font=("Arial", 9),
+        ).pack(
+            anchor=tk.W, padx=8
         )
-        self.entry_trade_resp_dica = tk.Entry(self.frame_trade_resp)
-        self.entry_trade_resp_dica.pack(fill=tk.X, padx=5, ipady=3)
+        self.entry_trade_resp_dica = tk.Entry(self.frame_trade_resp, relief=tk.FLAT, bg="#fffbeb")
+        self.entry_trade_resp_dica.pack(fill=tk.X, padx=8, pady=(2, 4), ipady=5)
         self.btn_aceitar = tk.Button(
             self.frame_trade_resp,
             text="Aceitar Troca",
             command=self.cmd_aceitar_troca,
-            bg="#4CAF50",
+            bg=SUCCESS,
             fg="white",
+            relief=tk.FLAT,
+            activebackground="#15803d",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_aceitar.pack(fill=tk.X, padx=5, pady=2)
+        self.btn_aceitar.pack(fill=tk.X, padx=8, pady=2, ipady=3)
         self.btn_recusar = tk.Button(
             self.frame_trade_resp,
             text="Recusar Troca",
             command=self.cmd_recusar_troca,
-            bg="#f44336",
+            bg=DANGER,
             fg="white",
+            relief=tk.FLAT,
+            activebackground="#b91c1c",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_recusar.pack(fill=tk.X, padx=5, pady=2)
+        self.btn_recusar.pack(fill=tk.X, padx=8, pady=(2, 8), ipady=3)
 
         self.btn_pronto = tk.Button(
             self.frame_mid,
-            text="Pronto (Encerrar meu Turno)",
+            text="Pronto",
             command=self.cmd_pronto,
-            bg="#FF9800",
+            bg=WARNING,
             fg="white",
             font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            activebackground="#d97706",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_pronto.pack(fill=tk.X, pady=(10, 2))
+        self.btn_pronto.pack(fill=tk.X, padx=12, pady=(12, 4), ipady=5)
 
         self.btn_continuar = tk.Button(
             self.frame_mid,
             text="Continuar Jogo",
             command=self.cmd_continuar,
-            bg="#2196F3",
+            bg=ACCENT,
             fg="white",
             font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            activebackground="#1d4ed8",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_continuar.pack(fill=tk.X, pady=2)
+        self.btn_continuar.pack(fill=tk.X, padx=12, pady=3, ipady=4)
         self.btn_encerrar_jogo = tk.Button(
             self.frame_mid,
             text="Encerrar Jogo",
             command=self.cmd_encerrar_jogo,
-            bg="#9C27B0",
+            bg=PURPLE,
             fg="white",
             font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            activebackground="#6d28d9",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_encerrar_jogo.pack(fill=tk.X, pady=2)
+        self.btn_encerrar_jogo.pack(fill=tk.X, padx=12, pady=3, ipady=4)
 
         self.btn_votar = tk.Button(
-            self.frame_mid, text="Votar para Reiniciar Jogo", command=self.cmd_votar
+            self.frame_mid,
+            text="Votar para Reiniciar",
+            command=self.cmd_votar,
+            bg=ACCENT,
+            fg="#ffffff",
+            relief=tk.FLAT,
+            activebackground="#1d4ed8",
+            activeforeground="#ffffff",
+            cursor="hand2",
         )
-        self.btn_votar.pack(fill=tk.X, pady=5)
+        self.btn_votar.pack(fill=tk.X, padx=12, pady=(4, 12), ipady=4)
 
         for btn in [
             self.btn_iniciar,
@@ -246,96 +365,161 @@ class GameGUI:
 
         self.update_ui_state()
 
-        self.frame_right = tk.Frame(self.root)
-        self.frame_right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.frame_right = tk.Frame(self.root, bg=APP_BG)
+        self.frame_right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=12, pady=12)
 
         self.frame_manual = tk.Frame(
-            self.frame_right, bg="#eee", relief=tk.SUNKEN, bd=1
+            self.frame_right, bg=PANEL_BG, relief=tk.FLAT, bd=0
         )
-        self.frame_manual.pack(fill=tk.X, pady=(0, 5))
+        self.frame_manual.pack(fill=tk.X, pady=(0, 12))
         tk.Label(
             self.frame_manual,
             text="MANUAL RÁPIDO",
             font=("Arial", 10, "bold"),
-            bg="#eee",
-        ).pack()
+            fg=TEXT_DARK,
+            bg=PANEL_BG,
+        ).pack(anchor=tk.W, padx=12, pady=(10, 0))
         self.txt_manual = tk.Text(
-            self.frame_manual, height=6, font=("Arial", 9), bg="#eee", relief=tk.FLAT
+            self.frame_manual,
+            height=4,
+            font=("Arial", 9),
+            bg=PANEL_BG,
+            fg=TEXT_MUTED,
+            relief=tk.FLAT,
+            padx=10,
+            pady=6,
         )
-        self.txt_manual.pack(fill=tk.X, padx=5)
+        self.txt_manual.pack(fill=tk.X, padx=8, pady=(0, 8))
         self._fill_manual_text()
 
+        self.frame_activity = tk.Frame(self.frame_right, bg=APP_BG)
+        self.frame_activity.pack(fill=tk.BOTH, expand=True)
+        self.frame_activity.columnconfigure(0, weight=4, uniform="activity")
+        self.frame_activity.columnconfigure(1, weight=3, uniform="activity")
+        self.frame_activity.rowconfigure(1, weight=1)
+
         tk.Label(
-            self.frame_right, text="Histórico de Jogo", font=("Arial", 12, "bold")
-        ).pack(anchor=tk.W)
+            self.frame_activity,
+            text="Histórico de Jogo",
+            font=("Arial", 12, "bold"),
+            bg=APP_BG,
+            fg=TEXT_DARK,
+        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
         self.txt_log = scrolledtext.ScrolledText(
-            self.frame_right, state="disabled", wrap=tk.WORD, bg="#f4f4f4", height=12
+            self.frame_activity,
+            state="disabled",
+            wrap=tk.WORD,
+            bg=PANEL_BG,
+            fg=TEXT_DARK,
+            height=9,
+            relief=tk.FLAT,
+            padx=10,
+            pady=8,
+            font=("Arial", 10),
         )
-        self.txt_log.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        self.txt_log.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
 
-        tk.Label(self.frame_right, text="Chat Global", font=("Arial", 12, "bold")).pack(
-            anchor=tk.W
-        )
+        tk.Label(
+            self.frame_activity,
+            text="Chat Global",
+            font=("Arial", 12, "bold"),
+            bg=APP_BG,
+            fg=TEXT_DARK,
+        ).grid(row=0, column=1, sticky="w", pady=(0, 4))
+
+        self.frame_chat_panel = tk.Frame(self.frame_activity, bg=APP_BG)
+        self.frame_chat_panel.grid(row=1, column=1, sticky="nsew")
+        self.frame_chat_panel.rowconfigure(0, weight=1)
+        self.frame_chat_panel.columnconfigure(0, weight=1)
 
         self.txt_chat = scrolledtext.ScrolledText(
-            self.frame_right, state="disabled", wrap=tk.WORD, bg="#ffffff", height=10
+            self.frame_chat_panel,
+            state="disabled",
+            wrap=tk.WORD,
+            bg=PANEL_BG,
+            fg=TEXT_DARK,
+            height=8,
+            relief=tk.FLAT,
+            padx=10,
+            pady=8,
+            font=("Arial", 10),
         )
-        self.txt_chat.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        self.txt_chat.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
 
-        self.frame_chat = tk.Frame(self.frame_right)
-        self.frame_chat.pack(fill=tk.X, pady=5)
-        self.entry_chat = tk.Entry(self.frame_chat)
-        self.entry_chat.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
+        self.frame_chat = tk.Frame(self.frame_chat_panel, bg=APP_BG)
+        self.frame_chat.grid(row=1, column=0, sticky="ew")
+        self.frame_chat.columnconfigure(0, weight=1)
+        self.entry_chat = tk.Entry(self.frame_chat, relief=tk.FLAT, bg=PANEL_BG, fg=TEXT_DARK)
+        self.entry_chat.grid(row=0, column=0, sticky="ew", ipady=8)
         self.entry_chat.bind("<Return>", lambda e: self.cmd_chat())
         tk.Button(
-            self.frame_chat, text="Enviar Chat", command=self.cmd_chat, width=15
-        ).pack(side=tk.RIGHT, padx=(5, 0), ipady=2)
+            self.frame_chat,
+            text="Enviar Chat",
+            command=self.cmd_chat,
+            width=15,
+            bg=ACCENT,
+            fg="#ffffff",
+            relief=tk.FLAT,
+            activebackground="#1d4ed8",
+            activeforeground="#ffffff",
+            cursor="hand2",
+        ).grid(row=0, column=1, sticky="e", padx=(8, 0), ipady=6)
+
+        self._configure_text_tags()
 
     def _fill_manual_text(self):
         manual = (
-            " CONTROLES DE JOGO\n"
-            " " + "—" * 25 + "\n"
-            " Iniciar       : Comeca a partida (LOBBY).\n"
-            " Dica Publica  : Palavra unica sobre seu objeto.\n"
-            " Adivinhar     : Escolha o alvo e mande seu palpite.\n"
-            " Trocar        : Troca privada de dicas (1x/turno).\n"
-            " Pronto        : Encerra suas acoes no turno.\n"
-            " " + "—" * 25 + "\n"
-            " Dica: Use o chat apenas para conversar!"
+            "Fluxo: envie sua dica pública, faça uma ação ou marque pronto.\n"
+            "Dicas e trocas aceitam uma única palavra. Palpites são julgados pelo dono do objeto.\n"
+            "Trocas privadas geram alerta de espionagem para terceiros. O chat global é somente conversa."
         )
         self.txt_manual.config(state="normal")
         self.txt_manual.insert(tk.END, manual)
         self.txt_manual.config(state="disabled")
 
-    def log_hint(self, hint_msg):
-        self.txt_hints_history.config(state="normal")
-        self.txt_hints_history.insert(tk.END, hint_msg + "\n")
-        self.txt_hints_history.see(tk.END)
-        self.txt_hints_history.config(state="disabled")
+    def _configure_text_tags(self):
+        self.txt_log.tag_config("system", foreground=ACCENT, spacing1=3, spacing3=3)
+        self.txt_log.tag_config("success", foreground=SUCCESS, spacing1=3, spacing3=3)
+        self.txt_log.tag_config("warning", foreground=WARNING, spacing1=3, spacing3=3)
+        self.txt_log.tag_config("danger", foreground=DANGER, spacing1=3, spacing3=3)
+        self.txt_log.tag_config("guess", foreground="#0f766e", spacing1=3, spacing3=3)
+        self.txt_log.tag_config("trade", foreground=PURPLE, spacing1=3, spacing3=3)
+        self.txt_log.tag_config("muted", foreground=TEXT_MUTED, spacing1=3, spacing3=3)
+        self.txt_chat.tag_config("sender", foreground=ACCENT, font=("Arial", 10, "bold"))
+        self.txt_chat.tag_config("time", foreground=TEXT_MUTED)
+        self.txt_hints_history.tag_config("hint", foreground="#bbf7d0")
+        self.txt_hints_history.tag_config("private", foreground="#fde68a")
+        self.txt_hints_history.tag_config("spy", foreground="#93c5fd")
 
     def _set_state(self, widgets, enabled):
         state = "normal" if enabled else "disabled"
         for w in widgets:
             w.config(state=state)
             if isinstance(w, tk.Button) and w in self._btn_colors:
-                w.config(bg=self._btn_colors[w] if enabled else DISABLED_BG)
+                if enabled:
+                    w.config(bg=self._btn_colors[w], fg="#ffffff", cursor="hand2")
+                else:
+                    w.config(bg=DISABLED_BG, fg=DISABLED_FG, cursor="")
 
-    def log_message(self, msg):
+    def log_message(self, msg, tag="muted"):
         self.txt_log.config(state="normal")
-        self.txt_log.insert(tk.END, msg + "\n")
+        self.txt_log.insert(tk.END, msg + "\n", tag)
         self.txt_log.see(tk.END)
         self.txt_log.config(state="disabled")
 
     def log_chat(self, sender, msg):
+        now = datetime.now().strftime("%H:%M")
         self.txt_chat.config(state="normal")
-        self.txt_chat.insert(tk.END, f"[{sender}]: {msg}\n")
+        self.txt_chat.insert(tk.END, f"{now}  ", "time")
+        self.txt_chat.insert(tk.END, f"{sender}: ", "sender")
+        self.txt_chat.insert(tk.END, f"{msg}\n")
         self.txt_chat.see(tk.END)
         self.txt_chat.config(state="disabled")
 
-    def log_hint(self, hint_msg):
+    def log_hint(self, hint_msg, tag="hint"):
         self.txt_hints_history.config(state="normal")
-        self.txt_hints_history.insert(tk.END, hint_msg + "\n")
+        self.txt_hints_history.insert(tk.END, hint_msg + "\n", tag)
         self.txt_hints_history.see(tk.END)
         self.txt_hints_history.config(state="disabled")
 
@@ -439,6 +623,16 @@ class GameGUI:
         elif phase == "END_GAME":
             self._set_state([self.btn_votar], True)
 
+    def _phase_label(self, phase):
+        labels = {
+            "LOBBY": "Lobby",
+            "WAITING_HINTS": "Dicas públicas",
+            "ACTION_PHASE": "Fase de ações",
+            "VOTE_CONTINUE": "Votação",
+            "END_GAME": "Fim de jogo",
+        }
+        return labels.get(phase, phase)
+
     def process_queue(self):
         try:
             while True:
@@ -446,6 +640,11 @@ class GameGUI:
                 event = msg[0]
                 if event == "chat":
                     self.log_chat(msg[1], msg[2])
+                elif event == "notice":
+                    self.log_message(msg[2], msg[1])
+                elif event == "hint":
+                    tag = msg[2] if len(msg) > 2 else "hint"
+                    self.log_hint(msg[1], tag)
                 elif event == "log":
                     if any(
                         x in msg[1]
@@ -453,12 +652,10 @@ class GameGUI:
                     ):
                         self.log_hint(msg[1])
                     else:
-                        self.log_message(msg[1])
+                        self.log_message(msg[1], "muted")
                 elif event == "phase":
                     new_phase, message = msg[1], msg[2]
-                    self.log_message(
-                        f"\n--- FASE ALTERADA: {new_phase} ---\n-> {message}"
-                    )
+                    self.log_message(f"{self._phase_label(new_phase)} | {message}", "system")
                     self.current_phase = new_phase
                     if new_phase in ("WAITING_HINTS", "LOBBY"):
                         self.hint_sent = False
@@ -479,7 +676,8 @@ class GameGUI:
                     )
                     self.frame_trade_resp.pack(fill=tk.X, pady=5)
                     self.log_message(
-                        f"[TROCA] {sender} enviou um pedido de troca. Responda no painel de ações."
+                        f"{sender} enviou um pedido de troca. Responda no painel de ações.",
+                        "trade",
                     )
                 elif event == "trade_notification":
                     p_a, p_b = msg[1], msg[2]
@@ -500,15 +698,15 @@ class GameGUI:
             )
             if hasattr(Image, "Resampling"):
                 resample_filter = Image.Resampling.LANCZOS
-            image = image.resize((260, 260), resample_filter)
+            image = ImageOps.contain(image, (560, 320), resample_filter)
             photo = ImageTk.PhotoImage(image)
             self.lbl_image.config(
-                image=photo, text="", bg="black", width=260, height=260
+                image=photo, text="", bg="black", width=560, height=320
             )
             self.lbl_image.image = photo
-            self.log_message("*** Imagem carregada e exibida na interface! ***")
+            self.log_message("Imagem do objeto carregada.", "success")
         except Exception as e:
-            self.log_message(f"[ERRO] Falha ao carregar imagem: {e}")
+            self.log_message(f"Falha ao carregar imagem: {e}", "danger")
 
     def ask_judgment(self, guesser, guess_word):
         resposta = messagebox.askyesno(
@@ -519,12 +717,13 @@ class GameGUI:
             ok, msg = self.server.judge_guess(self.player_name, guesser, resposta)
             if ok:
                 self.log_message(
-                    f"-> Você informou ao servidor que o palpite de {guesser} estava {'CORRETO' if resposta else 'ERRADO'}."
+                    f"Julgamento enviado: palpite de {guesser} marcado como {'correto' if resposta else 'errado'}.",
+                    "guess",
                 )
             else:
-                self.log_message(f"-> Falha ao registrar julgamento: {msg}")
+                self.log_message(f"Falha ao registrar julgamento: {msg}", "warning")
         except Exception as e:
-            self.log_message(f"[ERRO] Falha ao enviar julgamento: {e}")
+            self.log_message(f"Falha ao enviar julgamento: {e}", "danger")
 
     def send_action(self, action_func, *args):
         try:
@@ -534,10 +733,10 @@ class GameGUI:
             else:
                 ok, msg = True, res
             if msg:
-                self.log_message(f"-> {msg}")
+                self.log_message(msg, "success" if ok else "warning")
             return ok
         except Exception as e:
-            self.log_message(f"[ERRO DE REDE] {e}")
+            self.log_message(f"Erro de rede: {e}", "danger")
             return False
 
     def cmd_iniciar(self):
@@ -548,7 +747,7 @@ class GameGUI:
         if not dica:
             return
         if len(dica.split()) != 1:
-            self.log_message("-> Erro: a dica deve ser uma única palavra.")
+            self.log_message("A dica deve ser uma única palavra.", "warning")
             return
         ok = self.send_action(self.server.send_public_hint, self.player_name, dica)
         if ok:
@@ -578,10 +777,10 @@ class GameGUI:
         alvo = self.val_trade_alvo.get().strip()
         dica = self.entry_trade_dica.get().strip()
         if not alvo or not dica:
-            self.log_message("-> Erro: informe o jogador alvo e a dica.")
+            self.log_message("Informe o jogador alvo e a dica.", "warning")
             return
         if len(dica.split()) != 1:
-            self.log_message("-> Erro: a dica deve ser uma única palavra.")
+            self.log_message("A dica deve ser uma única palavra.", "warning")
             return
         ok = self.send_action(self.server.request_trade, self.player_name, alvo, dica)
         if ok:
@@ -590,13 +789,13 @@ class GameGUI:
     def cmd_aceitar_troca(self):
         dica = self.entry_trade_resp_dica.get().strip()
         if not dica:
-            self.log_message("-> Erro: informe sua dica para aceitar a troca.")
+            self.log_message("Informe sua dica para aceitar a troca.", "warning")
             return
         if len(dica.split()) != 1:
-            self.log_message("-> Erro: a dica deve ser uma única palavra.")
+            self.log_message("A dica deve ser uma única palavra.", "warning")
             return
         if not self.pending_trade_from:
-            self.log_message("-> Erro: nenhum pedido de troca pendente.")
+            self.log_message("Nenhum pedido de troca pendente.", "warning")
             return
         ok = self.send_action(
             self.server.respond_trade,
@@ -612,7 +811,7 @@ class GameGUI:
 
     def cmd_recusar_troca(self):
         if not self.pending_trade_from:
-            self.log_message("-> Erro: nenhum pedido de troca pendente.")
+            self.log_message("Nenhum pedido de troca pendente.", "warning")
             return
         ok = self.send_action(
             self.server.respond_trade, self.player_name, self.pending_trade_from, False
