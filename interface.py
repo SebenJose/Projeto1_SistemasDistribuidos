@@ -138,9 +138,37 @@ class GameGUI:
         )
         self.txt_hints_history.pack(fill=tk.BOTH, expand=True, padx=18, pady=(0, 14))
 
-        self.frame_mid = tk.Frame(self.root, width=380, bg=PANEL_BG)
-        self.frame_mid.pack(side=tk.LEFT, fill=tk.Y, padx=(12, 0), pady=12)
-        self.frame_mid.pack_propagate(False)
+        self._mid_container = tk.Frame(self.root, width=380, bg=PANEL_BG)
+        self._mid_container.pack(side=tk.LEFT, fill=tk.Y, padx=(12, 0), pady=12)
+        self._mid_container.pack_propagate(False)
+
+        self._canvas_mid = tk.Canvas(self._mid_container, bg=PANEL_BG, highlightthickness=0)
+        self._scrollbar_mid = tk.Scrollbar(
+            self._mid_container, orient="vertical", command=self._canvas_mid.yview
+        )
+        self._canvas_mid.configure(yscrollcommand=self._scrollbar_mid.set)
+        self._scrollbar_mid.pack(side=tk.RIGHT, fill=tk.Y)
+        self._canvas_mid.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.frame_mid = tk.Frame(self._canvas_mid, bg=PANEL_BG)
+        self._mid_win = self._canvas_mid.create_window((0, 0), window=self.frame_mid, anchor="nw")
+
+        def _sync_mid_scroll(e=None):
+            self._canvas_mid.configure(scrollregion=self._canvas_mid.bbox("all"))
+
+        def _sync_mid_width(e):
+            self._canvas_mid.itemconfig(self._mid_win, width=e.width)
+
+        self.frame_mid.bind("<Configure>", _sync_mid_scroll)
+        self._canvas_mid.bind("<Configure>", _sync_mid_width)
+
+        def _on_mousewheel(event):
+            self._canvas_mid.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        self._canvas_mid.bind("<Enter>", lambda e: self._canvas_mid.bind_all("<MouseWheel>", _on_mousewheel))
+        self._canvas_mid.bind("<Leave>", lambda e: self._canvas_mid.unbind_all("<MouseWheel>"))
+        self.frame_mid.bind("<Enter>", lambda e: self._canvas_mid.bind_all("<MouseWheel>", _on_mousewheel))
+        self.frame_mid.bind("<Leave>", lambda e: self._canvas_mid.unbind_all("<MouseWheel>"))
 
         self.btn_iniciar = tk.Button(
             self.frame_mid,
@@ -616,7 +644,7 @@ class GameGUI:
                     True,
                 )
                 if self.pending_trade_from:
-                    self.frame_trade_resp.pack(fill=tk.X, pady=5)
+                    self.frame_trade_resp.pack(fill=tk.X, pady=5, before=self.btn_pronto)
         elif phase == "VOTE_CONTINUE":
             if not self.continue_votes_cast:
                 self._set_state([self.btn_continuar, self.btn_encerrar_jogo], True)
